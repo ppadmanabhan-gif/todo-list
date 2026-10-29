@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My to-do list</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eaf2f1;
+    --card: #ffffff;
+    --ink: #123b3a;
+    --muted: #5d7776;
+    --line: #d3e2e0;
+    --accent: #0f766e;
+    --mark: #f2b632;
+    --late: #c2410c;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1d1d;
+      --card: #162a2a;
+      --ink: #e3efee;
+      --muted: #94adab;
+      --line: #27403f;
+      --accent: #2dd4bf;
+      --mark: #f2b632;
+      --late: #fb923c;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Lexend", "Segoe UI", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  main { max-width: 620px; margin: 0 auto; padding: 40px 18px 60px; }
+  h1 { font-size: 2rem; margin: 0; }
+  .summary { margin: 4px 0 24px; color: var(--muted); }
+
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  form input[type="text"] { flex: 1 1 260px; }
+  input, button {
+    font: inherit;
+    color: inherit;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    padding: 10px 12px;
+  }
+  input:focus-visible, button:focus-visible { outline: 3px solid var(--mark); outline-offset: 2px; }
+  .add { background: var(--accent); color: var(--card); border-color: var(--accent); font-weight: 600; cursor: pointer; }
+
+  .filters { display: flex; gap: 6px; margin: 22px 0 10px; }
+  .filters button { cursor: pointer; padding: 6px 14px; border-radius: 999px; }
+  .filters button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  ul { list-style: none; padding: 0; margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  li { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-top: 1px solid var(--line); }
+  li:first-child { border-top: none; }
+  li input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); flex: none; cursor: pointer; }
+  .text { flex: 1; word-break: break-word; }
+  .due { font-size: 0.85rem; color: var(--muted); white-space: nowrap; }
+  .due.late { color: var(--late); font-weight: 600; }
+  li.done .text { text-decoration: line-through; color: var(--muted); }
+  .delete { border: none; background: none; color: var(--muted); cursor: pointer; font-size: 1.2rem; padding: 4px 8px; }
+  .delete:hover { color: var(--late); }
+  .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+
+  .footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; color: var(--muted); font-size: 0.9rem; }
+  .clear { border: none; background: none; color: var(--accent); cursor: pointer; padding: 4px 0; text-decoration: underline; }
+</style>
+</head>
+<body>
+<main>
+  <h1>My to-do list</h1>
+  <p class="summary" id="summary"></p>
+
+  <form id="form">
+    <input type="text" id="task" placeholder="What do you need to do?" aria-label="New task" required>
+    <input type="date" id="due" aria-label="Due date (optional)">
+    <button type="submit" class="add">Add task</button>
+  </form>
+
+  <div class="filters" role="group" aria-label="Show tasks">
+    <button type="button" data-filter="all" aria-pressed="true">All</button>
+    <button type="button" data-filter="todo" aria-pressed="false">To do</button>
+    <button type="button" data-filter="done" aria-pressed="false">Done</button>
+  </div>
+
+  <ul id="list"></ul>
+
+  <div class="footer">
+    <span id="count"></span>
+    <button type="button" class="clear" id="clear">Clear finished tasks</button>
+  </div>
+</main>
+
+<script>
+const KEY = "todo-list-v1";
+let tasks = [];
+let filter = "all";
+
+try { tasks = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { tasks = []; }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(tasks)); } catch (e) {} };
+const today = () => new Date().toISOString().slice(0, 10);
+
+function render() {
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+  const shown = tasks.filter(t => filter === "all" || (filter === "done" ? t.done : !t.done));
+
+  if (!shown.length) {
+    const li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = filter === "done" ? "No finished tasks yet." : "Nothing here. Add a task above to get started.";
+    list.appendChild(li);
+  }
+
+  shown.forEach(t => {
+    const li = document.createElement("li");
+    if (t.done) li.className = "done";
+
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.checked = t.done;
+    box.setAttribute("aria-label", "Mark " + t.text + " as done");
+    box.addEventListener("change", () => { t.done = box.checked; save(); render(); });
+
+    const text = document.createElement("span");
+    text.className = "text";
+    text.textContent = t.text;
+
+    li.append(box, text);
+
+    if (t.due) {
+      const due = document.createElement("span");
+      const late = !t.done && t.due < today();
+      due.className = "due" + (late ? " late" : "");
+      due.textContent = (late ? "Overdue " : "Due ") +
+        new Date(t.due + "T00:00").toLocaleDateString("en-SG", { day: "numeric", month: "short" });
+      li.appendChild(due);
+    }
+
+    const del = document.createElement("button");
+    del.className = "delete";
+    del.textContent = "✕";
+    del.setAttribute("aria-label", "Delete " + t.text);
+    del.addEventListener("click", () => { tasks = tasks.filter(x => x !== t); save(); render(); });
+    li.appendChild(del);
+
+    list.appendChild(li);
+  });
+
+  const left = tasks.filter(t => !t.done).length;
+  document.getElementById("count").textContent = `${left} ${left === 1 ? "task" : "tasks"} left`;
+  document.getElementById("summary").textContent = tasks.length
+    ? `${tasks.length - left} of ${tasks.length} done`
+    : "Your tasks are saved in this browser.";
+  document.getElementById("clear").hidden = !tasks.some(t => t.done);
+}
+
+document.getElementById("form").addEventListener("submit", e => {
+  e.preventDefault();
+  const input = document.getElementById("task");
+  const due = document.getElementById("due");
+  const text = input.value.trim();
+  if (!text) return;
+  tasks.unshift({ id: Date.now(), text, due: due.value || null, done: false });
+  input.value = "";
+  due.value = "";
+  save();
+  render();
+  input.focus();
+});
+
+document.querySelectorAll("[data-filter]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    filter = btn.dataset.filter;
+    document.querySelectorAll("[data-filter]").forEach(b => b.setAttribute("aria-pressed", b === btn));
+    render();
+  });
+});
+
+document.getElementById("clear").addEventListener("click", () => {
+  tasks = tasks.filter(t => !t.done);
+  save();
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
